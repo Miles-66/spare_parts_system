@@ -118,7 +118,8 @@ class DataEngine:
                 data_files.append(file_path)
 
         # 按文件名排序，确保读取顺序一致
-        data_files.sort(key=lambda x: x.name)
+        # 支持 Path 对象和字符串
+        data_files.sort(key=lambda x: x.name if hasattr(x, 'name') else str(x))
         return data_files
 
     def match_file_by_keyword(self, file_name: str, keyword: str) -> bool:
@@ -126,12 +127,17 @@ class DataEngine:
         智能表名识别：使用关键词匹配文件名
 
         Args:
-            file_name: 文件名
+            file_name: 文件名（可以是字符串或Path对象）
             keyword: 关键词
 
         Returns:
             bool: 是否匹配
         """
+        # 支持字符串或Path对象
+        if hasattr(file_name, 'name'):
+            file_name = file_name.name
+        file_name = str(file_name)
+        
         # 忽略大小写匹配
         file_name_lower = file_name.lower()
         keyword_lower = keyword.lower()
