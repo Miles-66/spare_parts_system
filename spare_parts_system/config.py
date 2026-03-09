@@ -70,17 +70,48 @@ OSS_CONFIG = {
     "prefix": "data_source/"  # OSS 中的文件前缀
 }
 
+# 调试：打印配置（仅在 Streamlit 环境中）
+def debug_oss_config():
+    import streamlit as st
+    st.write("### OSS 配置调试信息")
+    st.write(f"USE_OSS: {USE_OSS}")
+    st.write(f"access_key_id: {'已设置' if OSS_CONFIG['access_key_id'] else '未设置'}")
+    st.write(f"access_key_secret: {'已设置' if OSS_CONFIG['access_key_secret'] else '未设置'}")
+    st.write(f"bucket_name: {OSS_CONFIG['bucket_name']}")
+    st.write(f"endpoint: {OSS_CONFIG['endpoint']}")
+
 # OSS Bucket 单例
 _oss_bucket = None
 
 def get_oss_bucket():
     """获取 OSS Bucket 对象"""
+    import streamlit as st
     global _oss_bucket
     if _oss_bucket is None:
         if not OSS_CONFIG["access_key_id"] or not OSS_CONFIG["access_key_secret"]:
-            raise ValueError("OSS credentials not configured. Please set OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET")
-        auth = oss2.Auth(OSS_CONFIG["access_key_id"], OSS_CONFIG["access_key_secret"])
-        _oss_bucket = oss2.Bucket(auth, OSS_CONFIG["endpoint"], OSS_CONFIG["bucket_name"])
+            st.error("OSS credentials 未配置! 请在 Streamlit Cloud secrets 中配置 oss.access_key_id 和 oss.access_key_secret")
+            return None
+        try:
+            auth = oss2.Auth(OSS_CONFIG["access_key_id"], OSS_CONFIG["access_key_secret"])
+            _oss_bucket = oss2.Bucket(auth, OSS_CONFIG["endpoint"], OSS_CONFIG["bucket_name"])
+            # 测试连接
+            _oss_bucket.get_bucket_info()
+        except oss2.exceptions.NoSuchBucket:
+            st.error(f"Bucket '{OSS_CONFIG['bucket_name']}' 不存在!")
+            _oss_bucket = None
+            return None
+        except oss2.exceptions.AccessDenied:
+            st.error(f"AccessKey 无权访问 Bucket '{OSS_CONFIG['bucket_name']}'! 请检查权限设置")
+            _oss_bucket = None
+            return None
+        except oss2.exceptions.InvalidEndpoint:
+            st.error(f"Endpoint '{OSS_CONFIG['endpoint']}' 无效! 请检查区域设置")
+            _oss_bucket = None
+            return None
+        except Exception as e:
+            st.error(f"OSS 连接失败: {e}")
+            _oss_bucket = None
+            return None
     return _oss_bucket
 
 
@@ -93,10 +124,19 @@ def read_excel_from_oss(oss_key: str) -> pd.DataFrame:
 
 def list_oss_files(prefix: str = "data_source/") -> list:
     """列出 OSS 中的文件"""
+    import streamlit as st
     bucket = get_oss_bucket()
     files = []
-    for obj in oss2.ObjectIterator(bucket, prefix=prefix):
-        files.append(obj.key)
+    try:
+        for obj in oss2.ObjectIterator(bucket, prefix=prefix):
+            files.append(obj.key)
+    except oss2.exceptions.ServerError as e:
+        st.error(f"OSS 连接错误: {e}")
+        st.error(f"请检查: bucket={OSS_CONFIG['bucket_name']}, endpoint={OSS_CONFIG['endpoint']}")
+        return []
+    except Exception as e:
+        st.error(f"OSS 未知错误: {e}")
+        return []
     return files
 
 
