@@ -88,11 +88,20 @@ class DataEngine:
         Returns:
             List: 数据文件路径列表（本地为Path对象，OSS为字符串key）
         """
-        # OSS模式
+        # OSS模式：搜索 data_source/ 下的所有文件
         if USE_OSS:
             folder_name = data_dir.name
+            # 先尝试精确匹配子文件夹
             prefix = f"data_source/{folder_name}/"
             files = list_oss_files(prefix)
+            
+            # 如果没找到，尝试在 data_source/ 根目录下搜索包含 folder_name 的文件
+            if not files:
+                all_files = list_oss_files("data_source/")
+                files = [f for f in all_files if folder_name in f.lower()]
+            
+            # 过滤只保留 Excel 文件
+            files = [f for f in files if f.endswith(('.xlsx', '.xls'))]
             return files
         
         # 本地模式
