@@ -126,10 +126,17 @@ def list_oss_files(prefix: str = "data_source/") -> list:
     """列出 OSS 中的文件"""
     import streamlit as st
     bucket = get_oss_bucket()
+    if bucket is None:
+        return []
     files = []
     try:
         for obj in oss2.ObjectIterator(bucket, prefix=prefix):
             files.append(obj.key)
+        # 调试：显示找到的文件
+        if files:
+            st.success(f"OSS找到 {len(files)} 个文件: {files[:5]}...")
+        else:
+            st.warning(f"OSS prefix '{prefix}' 下没有找到文件")
     except oss2.exceptions.ServerError as e:
         st.error(f"OSS 连接错误: {e}")
         st.error(f"请检查: bucket={OSS_CONFIG['bucket_name']}, endpoint={OSS_CONFIG['endpoint']}")
@@ -138,6 +145,27 @@ def list_oss_files(prefix: str = "data_source/") -> list:
         st.error(f"OSS 未知错误: {e}")
         return []
     return files
+
+
+def debug_list_all_oss_files():
+    """调试：列出OSS中所有文件"""
+    import streamlit as st
+    bucket = get_oss_bucket()
+    if bucket is None:
+        st.error("无法连接OSS")
+        return
+    st.write("### OSS 所有文件调试")
+    all_files = []
+    try:
+        for obj in oss2.ObjectIterator(bucket, prefix=""):
+            all_files.append(obj.key)
+        st.write(f"OSS中共有 {len(all_files)} 个文件:")
+        for f in all_files[:20]:
+            st.write(f"- {f}")
+        if len(all_files) > 20:
+            st.write(f"... 还有 {len(all_files)-20} 个文件")
+    except Exception as e:
+        st.error(f"列出文件失败: {e}")
 
 
 def get_data_files(data_dir: Path, keyword: str = None) -> list:
