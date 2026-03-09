@@ -131,7 +131,9 @@ def list_oss_files(prefix: str = "data_source/") -> list:
     files = []
     try:
         for obj in oss2.ObjectIterator(bucket, prefix=prefix):
-            files.append(obj.key)
+            # 清理路径：将反斜杠替换为正斜杠，保留完整路径
+            file_key = obj.key.replace('\\', '/')
+            files.append(file_key)
         # 调试：显示找到的文件
         if files:
             st.success(f"OSS找到 {len(files)} 个文件: {files[:5]}...")
@@ -157,13 +159,23 @@ def debug_list_all_oss_files():
     st.write("### OSS 所有文件调试")
     all_files = []
     try:
+        # 先尝试根目录
         for obj in oss2.ObjectIterator(bucket, prefix=""):
             all_files.append(obj.key)
         st.write(f"OSS中共有 {len(all_files)} 个文件:")
-        for f in all_files[:20]:
+        for f in all_files[:30]:
             st.write(f"- {f}")
-        if len(all_files) > 20:
-            st.write(f"... 还有 {len(all_files)-20} 个文件")
+        if len(all_files) > 30:
+            st.write(f"... 还有 {len(all_files)-30} 个文件")
+        
+        # 尝试 data_source/ 前缀
+        st.write("### 尝试 data_source/ 前缀:")
+        ds_files = []
+        for obj in oss2.ObjectIterator(bucket, prefix="data_source/"):
+            ds_files.append(obj.key)
+        st.write(f"找到 {len(ds_files)} 个文件:")
+        for f in ds_files[:20]:
+            st.write(f"- {f}")
     except Exception as e:
         st.error(f"列出文件失败: {e}")
 
