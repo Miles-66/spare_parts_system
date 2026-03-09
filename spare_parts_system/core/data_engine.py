@@ -163,7 +163,9 @@ class DataEngine:
 
         matched_files = []
         for file_path in all_files:
-            if self.match_file_by_keyword(file_path.name, keyword):
+            # 支持字符串和Path对象
+            file_name = file_path.name if hasattr(file_path, 'name') else str(file_path)
+            if self.match_file_by_keyword(file_name, keyword):
                 matched_files.append(file_path)
 
         return matched_files
@@ -196,16 +198,26 @@ class DataEngine:
         """
         return self.get_files_by_keyword(data_dir, FILE_KEYWORD_SHIPPING)
 
-    def get_file_info(self, file_path: Path) -> Dict:
+    def get_file_info(self, file_path) -> Dict:
         """
         获取文件信息
 
         Args:
-            file_path: 文件路径
+            file_path: 文件路径（Path对象或字符串）
 
         Returns:
             Dict: 文件信息字典
         """
+        # 支持字符串和Path对象
+        if isinstance(file_path, str):
+            # OSS文件只返回基本信息
+            return {
+                "path": file_path,
+                "name": file_path.split('/')[-1] if '/' in file_path else file_path,
+                "size": 0,
+                "modified_time": 0,
+                "extension": ".xlsx" if file_path.endswith('.xlsx') else ".xls",
+            }
         return {
             "path": str(file_path),
             "name": file_path.name,
@@ -268,19 +280,24 @@ class DataEngine:
             df = pd.read_csv(file_path, encoding="utf-8", on_bad_lines="skip")
             return df
         except Exception as e:
-            raise ValueError(f"无法读取CSV文件 {file_path.name}：{str(e)}")
+            fname = file_path.name if hasattr(file_path, 'name') else str(file_path)
+            raise ValueError(f"无法读取CSV文件 {fname}：{str(e)}")
 
-    def read_data_file(self, file_path: Path) -> pd.DataFrame:
+    def read_data_file(self, file_path) -> pd.DataFrame:
         """
         根据文件格式读取数据
 
         Args:
-            file_path: 数据文件路径
+            file_path: 数据文件路径（Path对象或字符串）
 
         Returns:
             pd.DataFrame: 读取的数据
         """
-        extension = file_path.suffix.lower()
+        # 支持字符串和Path对象
+        if isinstance(file_path, str):
+            extension = '.' + file_path.split('.')[-1].lower() if '.' in file_path else ''
+        else:
+            extension = file_path.suffix.lower()
 
         if extension in [".xlsx", ".xls"]:
             return self.read_excel_file(file_path)
@@ -432,7 +449,9 @@ def load_orders_data_with_cache() -> Tuple[pd.DataFrame, Dict]:
                 dataframes.append(df)
                 file_info_list.append(engine.get_file_info(file_path))
         except Exception as e:
-            warnings.warn(f"读取订单文件 {file_path.name} 失败：{str(e)}")
+            # 支持字符串和Path对象
+            fname = file_path.name if hasattr(file_path, 'name') else str(file_path)
+            warnings.warn(f"读取订单文件 {fname} 失败：{str(e)}")
 
     if not dataframes:
         return pd.DataFrame(), {
@@ -510,7 +529,8 @@ def load_shipping_data_with_cache() -> Tuple[pd.DataFrame, Dict]:
                 dataframes.append(df)
                 file_info_list.append(engine.get_file_info(file_path))
         except Exception as e:
-            warnings.warn(f"读取发货文件 {file_path.name} 失败：{str(e)}")
+            fname = file_path.name if hasattr(file_path, 'name') else str(file_path)
+            warnings.warn(f"读取发货文件 {fname} 失败：{str(e)}")
 
     if not dataframes:
         return pd.DataFrame(), {
@@ -566,10 +586,24 @@ def get_sales_data_summary() -> Dict:
     Returns:
         Dict: 数据摘要信息
     """
+    from config import USE_OSS
     engine = DataEngine()
     sales_dir = Path(SALES_DATA_DIR)
 
-    # 检查文件夹是否存在
+    # OSS模式
+    if USE_OSS:
+        files = engine.get_all_data_files(sales_dir)
+        return {
+            "exists": True,
+            "file_count": len(files),
+            "folder_path": "OSS: data_source/sales/",
+            "last_modified": None,
+            "files": [engine.get_file_info(f) for f in files],
+            "status": "ready",
+            "message": f"OSS销售数据就绪，包含 {len(files)} 个数据文件",
+        }
+    
+    # 本地模式
     if not sales_dir.exists():
         return {
             "exists": False,
